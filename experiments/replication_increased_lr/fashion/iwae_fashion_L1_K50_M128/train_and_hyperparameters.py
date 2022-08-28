@@ -9,10 +9,10 @@ discrete_data = True
 alpha = 0
 cuda = torch.cuda.is_available()
 test_batch_size = 32
-model_type = 'iwae'
+model_type = "iwae"
 torch.manual_seed(seed)
 
-data_name = 'mnist' 
+data_name = "mnist"
 
-logging_filename = f'{model_type}_{data_name}_K{K}_M{batch_size}.log'
-logging.basicConfig(filename=logging_filename,level=logging.DEBUG)
+logging_filename = f"{model_type}_{data_name}_K{K}_M{batch_size}.log"
+logging.basicConfig(filename=logging_filename, level=logging.DEBUG)

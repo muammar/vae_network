@@ -11,43 +11,48 @@ from torch.distributions.multinomial import Multinomial
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 
-os.makedirs('results', exist_ok=True)
+os.makedirs("results", exist_ok=True)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device = 'cpu'
+device = "cpu"
 # Hyperparameters
-alpha = -500 # alpha value used in Renyi alpha-divergence, ignored when model_type is vae/iwae/vrmax
-K = 5 # number of samples taken per input data point
-L = 2 # number of stochastic layers in network architecture; either 1 or 2
+alpha = (
+    -500
+)  # alpha value used in Renyi alpha-divergence, ignored when model_type is vae/iwae/vrmax
+K = 5  # number of samples taken per input data point
+L = 2  # number of stochastic layers in network architecture; either 1 or 2
 
-# vae       
-#   = Use L_VI objective                                (Optimize (1/K)*SUM(log[ p(x,z_k)/q(z_k|x)])). Choice of alpha is irrelevant. 
-# iwae      
+# vae
+#   = Use L_VI objective                                (Optimize (1/K)*SUM(log[ p(x,z_k)/q(z_k|x)])). Choice of alpha is irrelevant.
+# iwae
 #   = Use Importance Weighted AutoEncoder objective L_k (Optimize log[(1/K)*SUM(p(x,z)/q(z|x))]). Choice of alpha irrelevant.
-# vrmax     
+# vrmax
 #   = Use VR-max algorithm.                             (Optimize log[ MAX_k(p(x,z_k)/q(z_k|x))] ). Choice of alpha is irrelevant.
-# vralpha   
+# vralpha
 #   = Use VR-alpha                                      (Optimize log[ p(x,z_k)/q(z_k|x)] where the kth sample is whosen w.p. ~ magnitude^(1-alpha)). Alpha is used!
 # general_alpha
 #   = Use direct estimate of L_{\alpha,K}               (Optimize [1/(1-alpha)]*log((1/K)*SUM( log[ (p(x,z_k)/q(z_k|x))^(1-alpha) ] ))). Alpha is important!
-model_type = 'vralpha' # one of ['vae', 'iwae', 'vrmax', 'vralpha', 'general_alpha']
-data_name = 'mnist' # one of ['mnist', 'fashion', 'fashionmnist']
+model_type = "vralpha"  # one of ['vae', 'iwae', 'vrmax', 'vralpha', 'general_alpha']
+data_name = "mnist"  # one of ['mnist', 'fashion', 'fashionmnist']
 
 epochs = 501
 learning_rate = 1e-3
 
-log_interval = 1 # how frequently to log average training loss
-test_interval = 1 # how frequently to test
-train_batch_size = 100 # batch size during training
-test_batch_size = 32 # batch size used during testing, different than training because testing is done with K=5000
+log_interval = 1  # how frequently to log average training loss
+test_interval = 1  # how frequently to test
+train_batch_size = 100  # batch size during training
+test_batch_size = 32  # batch size used during testing, different than training because testing is done with K=5000
 
-seed = 1 # fixed seed
+seed = 1  # fixed seed
 torch.manual_seed(seed)
-discrete_data = True # always True for MNIST/FashionMNIST, but needed when training on continuous data
+discrete_data = True  # always True for MNIST/FashionMNIST, but needed when training on continuous data
 
-assert(L in [1, 2]) # we only have networks with 1 or 2 stochastic layers
-assert(model_type in ['vae', 'iwae', 'vrmax', 'vralpha', 'general_alpha'])
-assert(not(alpha==1 and model_type in ['vralpha', 'general_alpha'])) # divide by 0 error otherwise
-assert(data_name in ['mnist', 'fashion', 'fashionmnist'])
+assert L in [1, 2]  # we only have networks with 1 or 2 stochastic layers
+assert model_type in ["vae", "iwae", "vrmax", "vralpha", "general_alpha"]
+assert not (
+    alpha == 1 and model_type in ["vralpha", "general_alpha"]
+)  # divide by 0 error otherwise
+assert data_name in ["mnist", "fashion", "fashionmnist"]
+
 
 class mnist_omniglot_model1(nn.Module):
     def __init__(self, alpha):
@@ -74,7 +79,7 @@ class mnist_omniglot_model1(nn.Module):
         std = torch.exp(logstd)
         eps = torch.randn_like(std)
         # This is the reparametrization trick - represent the sample as a sum rather than black-box generated number
-        return mu + eps*std
+        return mu + eps * std
 
     def decode(self, z):
         h3 = torch.tanh(self.fc4(z))
@@ -91,7 +96,7 @@ class mnist_omniglot_model1(nn.Module):
         B, _, H, W = data.shape
 
         # Generate K copies of each observation. Each will get sampled once according to the generated distribution to generate a total of K observation samples
-        data_k_vec = data.repeat((1, K, 1, 1)).view(-1, H*W)
+        data_k_vec = data.repeat((1, K, 1, 1)).view(-1, H * W)
 
         # Retrieve the estimated mean and log(standard deviation) estimates from the posterior approximator
         mu, logstd = model.encode(data_k_vec)
@@ -103,8 +108,12 @@ class mnist_omniglot_model1(nn.Module):
         log_q = compute_log_probabitility_gaussian(z, mu, logstd)
 
         # Calculate log p(z) - how likely are the importance samples under the prior N(0,1) assumption?
-        log_p_z = compute_log_probabitility_gaussian(z, torch.zeros_like(z, requires_grad=False), torch.zeros_like(z, requires_grad=False))
-        
+        log_p_z = compute_log_probabitility_gaussian(
+            z,
+            torch.zeros_like(z, requires_grad=False),
+            torch.zeros_like(z, requires_grad=False),
+        )
+
         # Hand the samples to the decoder network and get a reconstruction of each sample.
         decoded = model.decode(z)
 
@@ -114,23 +123,25 @@ class mnist_omniglot_model1(nn.Module):
         # Begin calculating L_alpha depending on the (a) model type, and (b) optimization method
         # log_p_z + log_p - log_q = log(p(z_i)p(x|z_i)/q(z_i|x)) = log(p(x,z_i)/q(z_i|x)) = L_VI
         #   (for each importance sample i out of K for each observation)
-        if model_type == 'iwae' or test:
+        if model_type == "iwae" or test:
             # Re-order the entries so that each row holds the K importance samples for each observation
             log_w_matrix = (log_p_z + log_p - log_q).view(B, K)
-        
-        elif model_type =='vae':
+
+        elif model_type == "vae":
             # Don't reorder, and divide by K in anticipation of taking a batch sum of (1/K)*SUM(log(p(x,z)/q(z|x)))
-            log_w_matrix = (log_p_z + log_p - log_q).view(B*K, 1)*1/K
-        
-        elif model_type=='general_alpha' or model_type=='vralpha':
+            log_w_matrix = (log_p_z + log_p - log_q).view(B * K, 1) * 1 / K
+
+        elif model_type == "general_alpha" or model_type == "vralpha":
             # Re-order the entries so that each row holds the K importance samples for each observation
             # Multiply by (1-alpha) because (1-alpha)* log(p(x,z_i)/q(z_i|x)) =  log([p(x,z_i)/q(z_i|x)]^(1-alpha))
-            log_w_matrix = (log_p_z + log_p - log_q).view(-1, K) * (1-alpha)
-        
-        elif model_type == 'vrmax':
+            log_w_matrix = (log_p_z + log_p - log_q).view(-1, K) * (1 - alpha)
+
+        elif model_type == "vrmax":
             # Re-order the entries so that each row holds the K importance samples for each observation
             # Take the max in each row, representing the maximum-weighted sample
-            log_w_matrix = (log_p_z + log_p - log_q).view(-1, K).max(axis=1, keepdim=True).values
+            log_w_matrix = (
+                (log_p_z + log_p - log_q).view(-1, K).max(axis=1, keepdim=True).values
+            )
 
             # immediately return loss = -sum(L_alpha) over each observation
             return -torch.sum(log_w_matrix)
@@ -146,25 +157,28 @@ class mnist_omniglot_model1(nn.Module):
         # ws_norm = [p(z_i,x)/q(z_i|x)]/SUM([p(z_k,x)/q(z_k|x)])
         ws_norm = ws_matrix / torch.sum(ws_matrix, 1, keepdim=True)
 
-        if model_type == 'vralpha' and not test:
+        if model_type == "vralpha" and not test:
             # If we're specifically using a VR-alpha model, we want to choose a sample to backprop according to the values in ws_norm above
             # So we make a distribution in each row
             sample_dist = Multinomial(1, ws_norm)
 
             # Then we choose a sample in each row acccording to this distribution
-            ws_sum_per_datapoint = log_w_matrix.gather(1, sample_dist.sample().argmax(1, keepdim=True))
+            ws_sum_per_datapoint = log_w_matrix.gather(
+                1, sample_dist.sample().argmax(1, keepdim=True)
+            )
         else:
             # For any other model, we're taking the full sum at this point
             ws_sum_per_datapoint = torch.sum(log_w_matrix * ws_norm, 1)
 
         if model_type in ["general_alpha", "vralpha"] and not test:
             # For both VR-alpha and directly estimating L_alpha with a sum, we have to renormalize the sum with 1-alpha
-            ws_sum_per_datapoint /= (1 - alpha)
+            ws_sum_per_datapoint /= 1 - alpha
 
         # Return a value of loss = -L_alpha as the batch sum.
         loss = -torch.sum(ws_sum_per_datapoint)
 
         return loss
+
 
 # Define the model
 class mnist_omniglot_model2(nn.Module):
@@ -244,7 +258,9 @@ class mnist_omniglot_model2(nn.Module):
         z = model.reparameterize(mu, log_std)
 
         # Calculate Log p(z) (prior) - how likely are these values given the prior assumption N(0,1)?
-        log_p_z = torch.sum(-0.5 * z ** 2, 1) - .5 * z.shape[1] * T.log(torch.tensor(2 * np.pi))
+        log_p_z = torch.sum(-0.5 * z**2, 1) - 0.5 * z.shape[1] * T.log(
+            torch.tensor(2 * np.pi)
+        )
 
         # Calculate q (z | h1) - how likely are the generated output latent samples given the distributions they came from?
         log_qz_h1 = compute_log_probabitility_gaussian(z, mu, log_std)
@@ -275,28 +291,41 @@ class mnist_omniglot_model2(nn.Module):
         log_px_h1 = compute_log_probabitility_bernoulli(decoded, x)
 
         # Begin calculating L_alpha depending on the (a) model type, and (b) optimization method
-        # log_p_z + log_ph1_z + log_px_h1 - log_qz_h1 - log_qh1_x = 
+        # log_p_z + log_ph1_z + log_px_h1 - log_qz_h1 - log_qh1_x =
         #           log([p(z0_i)p(x|z1_i)p(z1_i|z0_i)]/[q(z0_i|z1_i)q(z1_i|x)]) = log(p(x,z0_i,z1_i)/q(z0_i,z1_i|x)) = L_VI
         #   (for each importance sample i out of K for each observation)
         # Note that if test==True then we're always using the IWAE objective!
-        if model_type == 'iwae' or test == True:
+        if model_type == "iwae" or test == True:
             # Re-order the entries so that each row holds the K importance samples for each observation
-            log_w_matrix = (log_p_z + log_ph1_z + log_px_h1 - log_qz_h1 - log_qh1_x).view(-1, K)
+            log_w_matrix = (
+                log_p_z + log_ph1_z + log_px_h1 - log_qz_h1 - log_qh1_x
+            ).view(-1, K)
 
-        elif model_type == 'vae':
+        elif model_type == "vae":
             # Don't reorder, and divide by K in anticipation of taking a batch sum of (1/K)*SUM(log(p(x,z)/q(z|x)))
-            log_w_matrix = (log_p_z + log_ph1_z + log_px_h1 - log_qz_h1 - log_qh1_x).view(-1, 1) * 1 / K
+            log_w_matrix = (
+                (log_p_z + log_ph1_z + log_px_h1 - log_qz_h1 - log_qh1_x).view(-1, 1)
+                * 1
+                / K
+            )
             return -torch.sum(log_w_matrix)
 
-        elif model_type == 'general_alpha' or model_type == 'vralpha':
+        elif model_type == "general_alpha" or model_type == "vralpha":
             # Re-order the entries so that each row holds the K importance samples for each observation
             # Multiply by (1-alpha) because (1-alpha)* log(p(x,z_i)/q(z_i|x)) =  log([p(x,z_i)/q(z_i|x)]^(1-alpha))
-            log_w_matrix = (log_p_z + log_ph1_z + log_px_h1 - log_qz_h1 - log_qh1_x).view(-1, K) * (1 - self.alpha)
+            log_w_matrix = (
+                log_p_z + log_ph1_z + log_px_h1 - log_qz_h1 - log_qh1_x
+            ).view(-1, K) * (1 - self.alpha)
 
-        elif model_type == 'vrmax':
+        elif model_type == "vrmax":
             # Re-order the entries so that each row holds the K importance samples for each observation
             # Take the max in each row, representing the maximum-weighted sample, then immediately return batch sum loss -L_alpha
-            log_w_matrix = (log_p_z + log_ph1_z + log_px_h1 - log_qz_h1 - log_qh1_x).view(-1, K).max(axis=1,keepdim=True).values
+            log_w_matrix = (
+                (log_p_z + log_ph1_z + log_px_h1 - log_qz_h1 - log_qh1_x)
+                .view(-1, K)
+                .max(axis=1, keepdim=True)
+                .values
+            )
             return -torch.sum(log_w_matrix)
 
         # Begin using the "max trick". Subtract the maximum log(*) sample value for each observation.
@@ -310,33 +339,42 @@ class mnist_omniglot_model2(nn.Module):
         # ws_norm = [p(z_i,x)/q(z_i|x)]/SUM([p(z_k,x)/q(z_k|x)])
         ws_norm = ws_matrix / torch.sum(ws_matrix, 1, keepdim=True)
 
-        if model_type == 'vralpha' and not test:
+        if model_type == "vralpha" and not test:
             # If we're specifically using a VR-alpha model, we want to choose a sample to backprop according to the values in ws_norm above
             # So we make a distribution in each row
             sample_dist = Multinomial(1, ws_norm)
 
             # Then we choose a sample in each row acccording to this distribution
-            ws_sum_per_datapoint = log_w_matrix.gather(1, sample_dist.sample().argmax(1, keepdim=True))
+            ws_sum_per_datapoint = log_w_matrix.gather(
+                1, sample_dist.sample().argmax(1, keepdim=True)
+            )
         else:
             # For any other model, we're taking the full sum at this point
             ws_sum_per_datapoint = torch.sum(log_w_matrix * ws_norm, 1)
 
         if model_type in ["general_alpha", "vralpha"] and not test:
             # For both VR-alpha and directly estimating L_alpha with a sum, we have to renormalize the sum with 1-alpha
-            ws_sum_per_datapoint /= (1 - alpha)
+            ws_sum_per_datapoint /= 1 - alpha
 
         loss = -torch.sum(ws_sum_per_datapoint)
 
         return loss
 
+
 # Compute N(obs| mu, sigma) for all K samples and sum over probabilities of the K samples
 def compute_log_probabitility_gaussian(obs, mu, logstd, axis=1):
-    return torch.sum(-0.5 * ((obs-mu) / torch.exp(logstd)) ** 2 - logstd, axis)-.5*obs.shape[1]*T.log(torch.tensor(2*np.pi))
+    return torch.sum(
+        -0.5 * ((obs - mu) / torch.exp(logstd)) ** 2 - logstd, axis
+    ) - 0.5 * obs.shape[1] * T.log(torch.tensor(2 * np.pi))
+
 
 # Compute Ber(obs| theta) for all K samples and sum over probabilities of the K samples
 def compute_log_probabitility_bernoulli(theta, obs, axis=1):
     # 1e-18 needed to avoid numerical errors
-    return torch.sum(obs*torch.log(theta+1e-18) + (1-obs)*torch.log(1-theta+1e-18), axis)
+    return torch.sum(
+        obs * torch.log(theta + 1e-18) + (1 - obs) * torch.log(1 - theta + 1e-18), axis
+    )
+
 
 # Define the model
 # class silhouettes_model(nn.Module):
@@ -537,8 +575,13 @@ def train(epoch):
         optimizer.step()
 
     if epoch % log_interval == 0:
-        print(f'====> Epoch: {epoch} Average loss: {train_loss / len(train_loader.dataset):.4f}')
-        logging.info(f'====> Epoch: {epoch} Average loss: {train_loss / len(train_loader.dataset):.4f}')
+        print(
+            f"====> Epoch: {epoch} Average loss: {train_loss / len(train_loader.dataset):.4f}"
+        )
+        logging.info(
+            f"====> Epoch: {epoch} Average loss: {train_loss / len(train_loader.dataset):.4f}"
+        )
+
 
 # pycharm thinks that I want to run a test whenever I define a function that has 'test' as prefix
 # this messes with running the model and is the reason why the function is called _test
@@ -549,56 +592,87 @@ def _test(epoch):
         for i, (data, labels) in enumerate(test_loader):
             data = data.to(device)
             recon_batch, mu, logvar = model(data)
-            loss = model.compute_loss_for_batch(data, model, K=5000,test=True)
+            loss = model.compute_loss_for_batch(data, model, K=5000, test=True)
             test_loss += loss.item()
             if i == 0:
                 n = min(data.size(0), 8)
-                comparison = torch.cat([data[:n],
-                                      recon_batch.view(test_batch_size, 1, 28, 28)[:n]])
-                save_image(comparison.cpu(),
-                         f'results/reconstruction_{model_type}_L={L}_{data_name}_alpha={alpha}_K={K}_epoch={epoch}.png',
-                           nrow=n)
+                comparison = torch.cat(
+                    [data[:n], recon_batch.view(test_batch_size, 1, 28, 28)[:n]]
+                )
+                save_image(
+                    comparison.cpu(),
+                    f"results/reconstruction_{model_type}_L={L}_{data_name}_alpha={alpha}_K={K}_epoch={epoch}.png",
+                    nrow=n,
+                )
                 noise = torch.randn(64, 50).to(device)
                 sample = model.decode(noise).cpu()
-                save_image(sample.view(64, 1, 28, 28),
-                           f'results/sample_{model_type}_L={L}_{data_name}_alpha={alpha}_K={K}_epoch={epoch}.png')
+                save_image(
+                    sample.view(64, 1, 28, 28),
+                    f"results/sample_{model_type}_L={L}_{data_name}_alpha={alpha}_K={K}_epoch={epoch}.png",
+                )
     test_loss /= len(test_loader.dataset)
-    print(f'====> Epoch: {epoch} Test set loss: {test_loss:.4f}')
-    logging.info(f'====> Epoch: {epoch} Test set loss: {test_loss:.4f}')
+    print(f"====> Epoch: {epoch} Test set loss: {test_loss:.4f}")
+    logging.info(f"====> Epoch: {epoch} Test set loss: {test_loss:.4f}")
     return test_loss
+
 
 def load_data_and_initialize_loaders(data_name, train_batch, test_batch):
     data_name = data_name.lower()
-    kwargs = {'num_workers': 1, 'pin_memory': True}
-    if data_name == 'mnist':
-        train_data = datasets.MNIST('./data', train=True, download=True, transform=transforms.ToTensor())
-        test_data = datasets.MNIST('./data', train=False, transform=transforms.ToTensor())
-    elif data_name == 'fashion' or data_name == 'fashionmnist':
-        train_data = datasets.FashionMNIST('./data', train=True, download=True, transform=transforms.ToTensor())
-        test_data = datasets.FashionMNIST('./data', train=False, transform=transforms.ToTensor())
-    elif data_name == 'omniglot':
-        train_data = datasets.Omniglot(root='./data', background=True, download=True, transform=transforms.ToTensor())
-        test_data = datasets.Omniglot(root='./data', background=False, download=True, transform=transforms.ToTensor())
+    kwargs = {"num_workers": 1, "pin_memory": True}
+    if data_name == "mnist":
+        train_data = datasets.MNIST(
+            "./data", train=True, download=True, transform=transforms.ToTensor()
+        )
+        test_data = datasets.MNIST(
+            "./data", train=False, transform=transforms.ToTensor()
+        )
+    elif data_name == "fashion" or data_name == "fashionmnist":
+        train_data = datasets.FashionMNIST(
+            "./data", train=True, download=True, transform=transforms.ToTensor()
+        )
+        test_data = datasets.FashionMNIST(
+            "./data", train=False, transform=transforms.ToTensor()
+        )
+    elif data_name == "omniglot":
+        train_data = datasets.Omniglot(
+            root="./data",
+            background=True,
+            download=True,
+            transform=transforms.ToTensor(),
+        )
+        test_data = datasets.Omniglot(
+            root="./data",
+            background=False,
+            download=True,
+            transform=transforms.ToTensor(),
+        )
     # else: raise Exception("Data name not recognized")
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size = train_batch, shuffle = True, ** kwargs)
-    test_loader = torch.utils.data.DataLoader(test_data, batch_size = test_batch, shuffle = True, ** kwargs)
+    train_loader = torch.utils.data.DataLoader(
+        train_data, batch_size=train_batch, shuffle=True, **kwargs
+    )
+    test_loader = torch.utils.data.DataLoader(
+        test_data, batch_size=test_batch, shuffle=True, **kwargs
+    )
     return train_loader, test_loader
 
+
 if __name__ == "__main__":
-    if L==1:
+    if L == 1:
         model = mnist_omniglot_model1(alpha).to(device)
     else:
         model = mnist_omniglot_model2(alpha).to(device)
-    train_loader, test_loader = load_data_and_initialize_loaders(data_name, train_batch_size, test_batch_size)
+    train_loader, test_loader = load_data_and_initialize_loaders(
+        data_name, train_batch_size, test_batch_size
+    )
     if torch.cuda.is_available():
         print("Training on GPU")
         logging.info("Training on GPU")
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    print(f'{datetime.datetime.now()} \nStarting training')
-    logging.info(f'{datetime.datetime.now()} \nStarting training')
-    for e in range(1, epochs+1):
+    print(f"{datetime.datetime.now()} \nStarting training")
+    logging.info(f"{datetime.datetime.now()} \nStarting training")
+    for e in range(1, epochs + 1):
         train(e)
         if e % test_interval == 0:
             _test(e)
@@ -608,5 +682,7 @@ if __name__ == "__main__":
     print("Training finished")
     logging.info("Training finished")
     print("Saving model")
-    torch.save(model.state_dict(),
-               f'models/{model_type}_L={L}_{data_name}_alpha={alpha}_K={K}_epochs={epochs}.pt')
+    torch.save(
+        model.state_dict(),
+        f"models/{model_type}_L={L}_{data_name}_alpha={alpha}_K={K}_epochs={epochs}.pt",
+    )

@@ -10,10 +10,10 @@ discrete_data = True
 alpha = 0
 num_rounds = 6
 cuda = torch.cuda.is_available()
-logging_filename = f'vrmax_omniglot_L1.log'
-logging.basicConfig(filename=logging_filename,level=logging.DEBUG)
+logging_filename = f"vrmax_omniglot_L1.log"
+logging.basicConfig(filename=logging_filename, level=logging.DEBUG)
 
-model_type = 'vrmax'
+model_type = "vrmax"
 torch.manual_seed(seed)
 
 device = torch.device("cuda" if cuda else "cpu")

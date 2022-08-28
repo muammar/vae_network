@@ -10,19 +10,19 @@ discrete_data = True
 num_rounds = 6
 cuda = torch.cuda.is_available()
 
-alpha = .5
-model_type = 'vralpha'
+alpha = 0.5
+model_type = "vralpha"
 
 torch.manual_seed(seed)
 
-data_name = 'omniglot'
+data_name = "omniglot"
 
 device = torch.device("cuda" if cuda else "cpu")
 
-if model_type not in ["general_alpha","vralpha"]:
-	model_name=model_type
+if model_type not in ["general_alpha", "vralpha"]:
+    model_name = model_type
 else:
-	model_name = model_type+str(alpha)
+    model_name = model_type + str(alpha)
 
-logging_filename = f'{model_name}_{data_name}_K{K}_M{batch_size}.log'
-logging.basicConfig(filename=logging_filename,level=logging.DEBUG)
+logging_filename = f"{model_name}_{data_name}_K{K}_M{batch_size}.log"
+logging.basicConfig(filename=logging_filename, level=logging.DEBUG)

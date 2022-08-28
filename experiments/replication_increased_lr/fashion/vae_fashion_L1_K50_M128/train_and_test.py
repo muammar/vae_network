@@ -6,18 +6,23 @@ def train(epoch):
         data = data.to(device)
         optimizer.zero_grad()
 
-        #recon_batch, mu, logvar = model(data)
-        #loss = loss_function(recon_batch, data, mu, logvar)
+        # recon_batch, mu, logvar = model(data)
+        # loss = loss_function(recon_batch, data, mu, logvar)
         recon_batch, _, _, loss = model.compute_loss_for_batch(data, model)
         loss.backward()
         train_loss += loss.item()
         optimizer.step()
 
-
-    print('====> Epoch: {} Average loss: {:.4f}'.format(
-          epoch,  train_loss / len(train_loader.dataset)))
-    logging.info('====> Epoch: {} Average loss: {:.4f}'.format(
-          epoch,  train_loss / len(train_loader.dataset)))
+    print(
+        "====> Epoch: {} Average loss: {:.4f}".format(
+            epoch, train_loss / len(train_loader.dataset)
+        )
+    )
+    logging.info(
+        "====> Epoch: {} Average loss: {:.4f}".format(
+            epoch, train_loss / len(train_loader.dataset)
+        )
+    )
     train_losses.append(train_loss / len(train_loader.dataset))
 
 
@@ -30,18 +35,24 @@ def _test(epoch):
         for i, (data, _) in enumerate(test_loader):
             data = data.to(device)
             recon_batch, mu, logvar = model(data)
-            _, _, _, loss = model.compute_loss_for_batch(data, model, 5000, testing_mode=True)
+            _, _, _, loss = model.compute_loss_for_batch(
+                data, model, 5000, testing_mode=True
+            )
             test_loss += loss.item()
-            #test_loss += loss_function(recon_batch, data, mu, logvar).item()
+            # test_loss += loss_function(recon_batch, data, mu, logvar).item()
             if i == 0:
                 n = min(data.size(0), 8)
-                comparison = torch.cat([data[:n],
-                                      recon_batch.view(test_batch_size, 1, 28, 28)[:n]])
-                save_image(comparison.cpu(),
-                         'results/reconstruction_' + str(epoch) + '.png', nrow=n)
+                comparison = torch.cat(
+                    [data[:n], recon_batch.view(test_batch_size, 1, 28, 28)[:n]]
+                )
+                save_image(
+                    comparison.cpu(),
+                    "results/reconstruction_" + str(epoch) + ".png",
+                    nrow=n,
+                )
 
     test_loss /= len(test_loader.dataset)
-    #test_loss *= 5000
-    print('====> Test set loss: {:.4f}'.format(test_loss))
-    logging.info('====> Test set loss: {:.4f}'.format(test_loss))
+    # test_loss *= 5000
+    print("====> Test set loss: {:.4f}".format(test_loss))
+    logging.info("====> Test set loss: {:.4f}".format(test_loss))
     test_losses.append(test_loss)

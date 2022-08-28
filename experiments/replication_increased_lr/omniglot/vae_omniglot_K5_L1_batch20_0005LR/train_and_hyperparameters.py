@@ -10,10 +10,10 @@ discrete_data = True
 alpha = 1
 num_rounds = 6
 cuda = torch.cuda.is_available()
-logging_filename = f'vae_omniglot_L1.log'
-logging.basicConfig(filename=logging_filename,level=logging.DEBUG)
+logging_filename = f"vae_omniglot_L1.log"
+logging.basicConfig(filename=logging_filename, level=logging.DEBUG)
 
-model_type = 'vae'
+model_type = "vae"
 torch.manual_seed(seed)
 
 device = torch.device("cuda" if cuda else "cpu")
